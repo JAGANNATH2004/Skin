@@ -1,11 +1,12 @@
-﻿import os
-import re
+import os
 import logging
 import asyncio
-from typing import Dict, Any, Optional, List
-from courier.client import Courier
+from typing import Dict, Any, Optional
+import requests
 
 logger = logging.getLogger("skincare_api")
+
+COURIER_API_BASE_URL = "https://api.courier.com"
 
 
 def _mask_email(email: str) -> str:
@@ -21,18 +22,18 @@ def _mask_email(email: str) -> str:
     return f"{masked_user}@{domain}"
 
 
-def get_courier_client() -> Courier:
+def get_courier_api_key() -> str:
     """
-    Initializes and returns the official Courier SDK client.
-    Reads the API key strictly from the COURIER_API_KEY environment variable.
+    Reads the Courier API key strictly from the COURIER_API_KEY environment variable.
+    Raises ValueError if the key is missing or unconfigured.
     """
-    api_key = os.environ.get("COURIER_API_KEY", "").strip()
-    if not api_key or api_key == "replace_with_your_new_courier_api_key":
+    key = os.environ.get("COURIER_API_KEY", "").strip()
+    if not key or key == "replace_with_your_new_courier_api_key":
         raise ValueError(
             "COURIER_API_KEY environment variable is missing or unconfigured. "
-            "Please configure your active Courier API key in your .env file."
+            "Please configure your active Courier API key in your .env or Render dashboard."
         )
-    return Courier(api_key=os.environ["COURIER_API_KEY"])
+    return key
 
 
 def send_email_notification(
@@ -43,18 +44,10 @@ def send_email_notification(
 ) -> Dict[str, Any]:
     """
     Sends a transactional email notification directly to a recipient email
-    using the official Courier Python SDK. Delivery is routed through the
-    connected Gmail integration configured in the Courier dashboard.
+    using Courier's REST API. Delivery is routed through the connected
+    Gmail integration configured in the Courier dashboard.
 
-    Parameters:
-        recipient_email: Destination email address (e.g. user.email or patient.email).
-        subject: Generic, privacy-safe subject line (no sensitive health data).
-        html_content: Responsive HTML markup for the notification body.
-        user_id: Optional project user or patient identifier.
-
-    Returns:
-        Dict containing success status, Courier request_id, masked recipient,
-        and human-readable status message.
+    Compatible with Render and FastAPI without relying on fragile SDK packages.
     """
     clean_recipient = (recipient_email or "").strip().lower()
     if not clean_recipient or "@" not in clean_recipient:
@@ -67,55 +60,12 @@ def send_email_notification(
             "request_id": None
         }
 
-    # Sanitize subject to ensure medical details/prescriptions are never in subjects
     clean_subject = (subject or "Update from AI Skin Intelligence").strip()
-
     masked_recipient = _mask_email(clean_recipient)
-    logger.info("Initiating Courier email dispatch to recipient: %s | Subject: '%s'", masked_recipient, clean_subject)
+    logger.info("Initiating Courier email dispatch to: %s | Subject: '%s'", masked_recipient, clean_subject)
 
     try:
-        client = get_courier_client()
-
-        to_payload: Dict[str, Any] = {
-            "email": clean_recipient
-        }
-        if user_id:
-            to_payload["user_id"] = str(user_id)
-
-        # Courier direct email recipient format
-        response = client.send.message(
-            message={
-                "to": to_payload,
-                "content": {
-                    "version": "2022-01-01",
-                    "elements": [
-                        {
-                            "type": "meta",
-                            "title": clean_subject
-                        },
-                        {
-                            "type": "html",
-                            "content": html_content
-                        }
-                    ]
-                }
-            }
-        )
-
-        request_id = getattr(response, "request_id", None) or (response.get("request_id") if isinstance(response, dict) else str(response))
-        logger.info(
-            "Courier email dispatched successfully. Request ID: %s | Recipient: %s",
-            request_id, masked_recipient
-        )
-
-        return {
-            "success": True,
-            "request_id": request_id,
-            "recipient": clean_recipient,
-            "subject": clean_subject,
-            "message": f"Notification successfully submitted to Courier (Request ID: {request_id})."
-        }
-
+        api_key = get_courier_api_key()
     except ValueError as val_err:
         logger.error("Courier configuration error: %s", val_err)
         return {
@@ -125,8 +75,91 @@ def send_email_notification(
             "request_id": None,
             "message": f"Courier configuration error: {val_err}"
         }
+
+    # Prepare recipient payload
+    to_payload: Dict[str, Any] = {"email": clean_recipient}
+    if user_id:
+        to_payload["user_id"] = str(user_id)
+
+    # Standard Courier direct message format
+    payload = {
+        "message": {
+            "to": to_payload,
+            "content": {
+                "version": "2022-01-01",
+                "elements": [
+                    {
+                        "type": "meta",
+                        "title": clean_subject
+                    },
+                    {
+                        "type": "html",
+                        "content": html_content
+                    }
+                ]
+            }
+        }
+    }
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "User-Agent": "AISkinIntelligence/2.0 (Python/Requests)"
+    }
+
+    try:
+        # Timeout: 5 seconds connect, 15 seconds read
+        response = requests.post(
+            f"{COURIER_API_BASE_URL}/send",
+            json=payload,
+            headers=headers,
+            timeout=(5.0, 15.0)
+        )
+
+        resp_data = response.json() if response.content else {}
+
+        if response.status_code in (200, 201, 202):
+            request_id = resp_data.get("requestId") or resp_data.get("request_id") or "SUBMITTED"
+            logger.info("Courier email dispatched successfully. Request ID: %s | Recipient: %s", request_id, masked_recipient)
+            return {
+                "success": True,
+                "request_id": request_id,
+                "recipient": clean_recipient,
+                "subject": clean_subject,
+                "message": f"Notification successfully submitted to Courier (Request ID: {request_id})."
+            }
+        else:
+            api_error_msg = resp_data.get("message") or resp_data.get("error") or f"HTTP {response.status_code}"
+            logger.error("Courier API returned error status %s: %s", response.status_code, api_error_msg)
+            return {
+                "success": False,
+                "error": str(api_error_msg),
+                "status_code": response.status_code,
+                "recipient": clean_recipient,
+                "request_id": None,
+                "message": f"Courier dispatch failed with status {response.status_code}: {api_error_msg}"
+            }
+
+    except requests.exceptions.Timeout:
+        logger.error("Courier API request timed out for %s", masked_recipient)
+        return {
+            "success": False,
+            "error": "Courier API request timed out",
+            "recipient": clean_recipient,
+            "request_id": None,
+            "message": "Courier API connection timed out. Please try again."
+        }
+    except requests.exceptions.RequestException as req_err:
+        logger.error("Network error communicating with Courier API for %s: %s", masked_recipient, req_err)
+        return {
+            "success": False,
+            "error": str(req_err),
+            "recipient": clean_recipient,
+            "request_id": None,
+            "message": f"Courier network connection error: {req_err}"
+        }
     except Exception as exc:
-        logger.error("Courier API dispatch failed for %s: %s", masked_recipient, exc)
+        logger.error("Unexpected error during Courier dispatch for %s: %s", masked_recipient, exc)
         return {
             "success": False,
             "error": str(exc),
@@ -145,7 +178,7 @@ async def send_email_notification_async(
     """
     Non-blocking asynchronous wrapper around send_email_notification.
     Executes the Courier HTTP network call in a worker thread so the
-    FastAPI event loop remains responsive.
+    FastAPI event loop remains fully responsive.
     """
     return await asyncio.to_thread(
         send_email_notification,
@@ -161,15 +194,6 @@ def get_courier_delivery_status(request_id: str) -> Dict[str, Any]:
     Retrieves message delivery status from Courier using its request ID.
     Inspects provider information to verify delivery through the connected
     Gmail integration.
-
-    Returns:
-        Dict containing:
-            - request_id: Courier request / message ID
-            - status: Overall delivery status (e.g. DELIVERED, SENT, ENQUEUED, UNDELIVERABLE)
-            - provider: Name of the delivery provider (expected: 'gmail')
-            - provider_error: Any provider-specific error message
-            - delivered: Delivery timestamp (if available)
-            - raw: Structured details
     """
     clean_id = (request_id or "").strip()
     if not clean_id:
@@ -182,11 +206,41 @@ def get_courier_delivery_status(request_id: str) -> Dict[str, Any]:
         }
 
     try:
-        client = get_courier_client()
-        msg = client.messages.retrieve(message_id=clean_id)
+        api_key = get_courier_api_key()
+    except ValueError as val_err:
+        return {
+            "success": False,
+            "request_id": clean_id,
+            "error": str(val_err),
+            "status": "UNCONFIGURED",
+            "provider": None,
+            "provider_error": str(val_err)
+        }
 
-        overall_status = getattr(msg, "status", None) or "UNKNOWN"
-        providers_list = getattr(msg, "providers", None) or []
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        response = requests.get(
+            f"{COURIER_API_BASE_URL}/messages/{clean_id}",
+            headers=headers,
+            timeout=(5.0, 15.0)
+        )
+        if response.status_code != 200:
+            return {
+                "success": False,
+                "request_id": clean_id,
+                "error": f"Courier API returned status {response.status_code}",
+                "status": "NOT_FOUND" if response.status_code == 404 else "ERROR",
+                "provider": None,
+                "provider_error": response.text[:200]
+            }
+
+        data = response.json()
+        overall_status = data.get("status") or "UNKNOWN"
+        providers_list = data.get("providers") or []
         provider_name = None
         provider_error = None
 
@@ -195,13 +249,9 @@ def get_courier_delivery_status(request_id: str) -> Dict[str, Any]:
             if isinstance(primary_p, dict):
                 provider_name = primary_p.get("provider") or primary_p.get("channel")
                 provider_error = primary_p.get("error")
-            else:
-                provider_name = getattr(primary_p, "provider", None) or getattr(primary_p, "channel", None)
-                provider_error = getattr(primary_p, "error", None)
 
-        # Top-level fallback error
-        if not provider_error and getattr(msg, "error", None):
-            provider_error = getattr(msg, "error", None)
+        if not provider_error and data.get("error"):
+            provider_error = data.get("error")
 
         logger.info(
             "Courier status retrieved for Request ID %s | Status: %s | Provider: %s",
@@ -214,8 +264,8 @@ def get_courier_delivery_status(request_id: str) -> Dict[str, Any]:
             "status": str(overall_status).upper(),
             "provider": provider_name,
             "provider_error": provider_error,
-            "delivered": getattr(msg, "delivered", None),
-            "sent": getattr(msg, "sent", None)
+            "delivered": data.get("delivered"),
+            "sent": data.get("sent")
         }
 
     except Exception as exc:
