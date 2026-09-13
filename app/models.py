@@ -251,6 +251,7 @@ class UserReminderLog(Base):
     channel = Column(String(20), nullable=False, default="email")
     subject = Column(String(255), nullable=False, default="")
     status = Column(String(20), nullable=False, default="sent")  # sent, simulated, failed, skipped
+    courier_request_id = Column(String(100), nullable=True, default=None)
     sent_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
 
     user = relationship("User", backref=backref("reminder_logs", cascade="all, delete-orphan"))

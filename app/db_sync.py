@@ -18,6 +18,7 @@ def sync_database_schema():
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(50) DEFAULT '';"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS push_notifications_mobile BOOLEAN DEFAULT TRUE;"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS push_notifications_email BOOLEAN DEFAULT TRUE;"))
+            conn.execute(text("ALTER TABLE user_reminder_logs ADD COLUMN IF NOT EXISTS courier_request_id VARCHAR(100) DEFAULT NULL;"))
             conn.commit()
         logger.info("Database schema columns synchronized successfully.")
     except Exception as exc:

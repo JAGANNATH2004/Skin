@@ -36,7 +36,18 @@ from app.models import (
 )
 from app.db_sync import sync_database_schema
 from app.services.routine_engine import generate_personalized_routine_data, get_current_season
-from app.services.notification_service import dispatch_user_reminder
+from app.services.notification_service import (
+    dispatch_user_reminder,
+    send_welcome_notification,
+    send_appointment_reminder,
+    send_password_reset_notification,
+    send_clinical_update_notification,
+)
+from app.services.courier_service import (
+    send_email_notification,
+    send_email_notification_async,
+    get_courier_delivery_status,
+)
 from app.services.reminder_performance_engine import (
     background_reminder_worker,
     evaluate_user_performance_and_remind,
@@ -250,10 +261,17 @@ class ReminderLogResponse(BaseModel):
     channel: str
     subject: str
     status: str
+    courier_request_id: Optional[str] = None
     sent_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+
+class CourierTestRequest(BaseModel):
+    recipient_email: EmailStr
+    subject: Optional[str] = "AI Skin Intelligence: Test Notification"
+    message: Optional[str] = "This is a test notification verifying Courier delivery through your connected Gmail integration."
 
 
 class StatusResponse(BaseModel):
@@ -1196,6 +1214,19 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)) -> T
     db.refresh(new_record)
 
     token = create_access_token(new_record.email, clean_role)
+
+    # Dispatch non-blocking onboarding/welcome notification via Courier
+    try:
+        asyncio.create_task(
+            send_welcome_notification(
+                user_email=new_record.email,
+                user_name=clean_name or "there",
+                user_id=str(new_record.id)
+            )
+        )
+    except Exception as notify_err:
+        logger.warning("Could not enqueue welcome notification: %s", notify_err)
+
     return TokenResponse(access_token=token)
 
 
@@ -1210,7 +1241,8 @@ async def google_login(request: GoogleOAuthRequest, db: Session = Depends(get_db
         id_info = id_token.verify_oauth2_token(
             request.credential,
             google_requests.Request(),
-            google_client_id if google_client_id else None
+            google_client_id if google_client_id else None,
+            clock_skew_in_seconds=15,
         )
     except Exception as exc:
         logger.error("Google OAuth token verification failed: %s", exc)
@@ -1452,7 +1484,7 @@ async def send_notification(
         title = payload.title or "AI Skin Intelligence: Routine & Assessment Digest"
         message = payload.message or f"Hi {user_name}, your personalized AI skin score and recommendations have been synchronized. Check your dashboard for latest insights!"
         
-        # Dispatch through Python email module & smtplib
+        # Dispatch through Courier Python SDK with connected Gmail integration
         dispatch_res = dispatch_user_reminder(
             user=user_record,
             reminder_type="platform",
@@ -1469,8 +1501,8 @@ async def send_notification(
             "target": target,
             "timestamp": timestamp,
             "channel_enabled": bool(user_record.push_notifications_email),
-            "simulated": dispatch_res.get("simulated", False),
-            "status_text": dispatch_res.get("message", f"Email push notification dispatched successfully to {target}."),
+            "request_id": dispatch_res.get("request_id"),
+            "status_text": dispatch_res.get("message", f"Email notification dispatched successfully to {target} via Courier."),
         }
 
 
@@ -1563,6 +1595,56 @@ async def get_user_reminder_logs(
         .all()
     )
     return logs
+
+
+@app.post("/admin/notifications/test-courier")
+async def test_courier_notification(
+    payload: CourierTestRequest,
+    current_user: UserPayload = Depends(get_current_user),
+):
+    """
+    Safe test endpoint:
+    Dispatches a single test notification through Courier to the explicitly
+    supplied recipient email, confirming Gmail integration routing.
+    Never sends automatically on startup.
+    """
+    clean_email = payload.recipient_email.strip().lower()
+    clean_subject = (payload.subject or "AI Skin Intelligence: Test Notification").strip()
+    msg_body = payload.message or "This is a test notification verifying Courier delivery through your connected Gmail integration."
+    html_body = f"""
+    <div style="font-family: sans-serif; max-width: 600px; margin: 20px auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+      <h2 style="color: #0f172a; margin-top: 0;">AI Skin Intelligence Notification Test</h2>
+      <p style="color: #334155; font-size: 15px; line-height: 1.6;">{msg_body}</p>
+      <div style="background: #f8fafc; border-left: 4px solid #6366f1; padding: 12px 16px; margin: 16px 0; font-size: 14px; color: #4338ca;">
+        <strong>Courier + Gmail Integration:</strong>
+        <p style="margin: 4px 0 0 0; color: #475569;">Delivery is routed via Courier to your connected Gmail integration.</p>
+      </div>
+      <p style="font-size: 12px; color: #94a3b8; margin-top: 24px;">Generated safely by test request. Timestamp: {datetime.now(timezone.utc).isoformat()}</p>
+    </div>
+    """
+
+    res = await send_email_notification_async(
+        recipient_email=clean_email,
+        subject=clean_subject,
+        html_content=html_body,
+        user_id=None
+    )
+    return res
+
+
+@app.get("/admin/notifications/status/{request_id}")
+async def check_courier_notification_status(
+    request_id: str,
+    current_user: UserPayload = Depends(get_current_user),
+):
+    """
+    Retrieves message delivery status from Courier using its request ID.
+    Returns overall status, delivery provider (expected: 'gmail'), and any provider error.
+    """
+    if not request_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="request_id is required")
+    status_info = get_courier_delivery_status(request_id)
+    return status_info
 
 
 @app.get("/user/profile", response_model=SkinProfileResponse)

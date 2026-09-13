@@ -1,29 +1,21 @@
 import os
 import logging
-import smtplib
 from datetime import datetime, timezone
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from typing import Dict, Any, Optional
 
 from dotenv import load_dotenv
+from app.services.courier_service import send_email_notification, send_email_notification_async
 
 load_dotenv()
 
 logger = logging.getLogger("skincare_api")
 
-# SMTP Configuration from .env
-def get_smtp_config():
-    sender_email = (os.getenv("SENDER_EMAIL") or os.getenv("SMTP_EMAIL") or "").strip()
-    app_password = (os.getenv("APP_PASSWORD") or os.getenv("SMTP_PASSWORD") or "").strip()
-    smtp_host = (os.getenv("SMTP_HOST") or "smtp.gmail.com").strip()
-    smtp_port = int(os.getenv("SMTP_PORT") or "587")
-    return sender_email, app_password, smtp_host, smtp_port
 
+def is_courier_configured() -> bool:
+    """Returns True if COURIER_API_KEY is configured in the environment."""
+    key = (os.getenv("COURIER_API_KEY") or "").strip()
+    return bool(key and key != "replace_with_your_new_courier_api_key")
 
-def is_smtp_configured() -> bool:
-    sender_email, app_password, _, _ = get_smtp_config()
-    return bool(sender_email and app_password)
 
 
 def create_base_email_template(
@@ -163,73 +155,15 @@ def create_base_email_template(
 
 def send_raw_email(recipient: str, subject: str, html_content: str, plain_text: Optional[str] = None) -> Dict[str, Any]:
     """
-    Sends an email using Python's standard email module and smtplib.
-    If SENDER_EMAIL or APP_PASSWORD is not configured, logs the payload safely
-    and returns simulated status.
+    Routes email delivery through the official Courier Python SDK with Gmail integration.
+    Maintained for backwards-compatibility.
     """
-    sender_email, app_password, smtp_host, smtp_port = get_smtp_config()
+    return send_email_notification(
+        recipient_email=recipient,
+        subject=subject,
+        html_content=html_content
+    )
 
-    if not sender_email or not app_password:
-        logger.warning(
-            "SMTP credentials not fully configured in .env (SENDER_EMAIL / APP_PASSWORD). "
-            "Simulating email dispatch to: %s with subject: '%s'", recipient, subject
-        )
-        return {
-            "success": True,
-            "simulated": True,
-            "recipient": recipient,
-            "sender": sender_email,
-            "subject": subject,
-            "message": "Email rendered and simulated (provide SENDER_EMAIL and APP_PASSWORD in .env for live SMTP delivery)."
-        }
-
-    try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = f"AI Skin Intelligence <{sender_email}>"
-        msg["To"] = recipient
-
-        # Fallback plain text version
-        if not plain_text:
-            plain_text = f"{subject}\n\nPlease view this email in an HTML-compatible client or open your dashboard."
-        part_text = MIMEText(plain_text, "plain", "utf-8")
-        part_html = MIMEText(html_content, "html", "utf-8")
-
-        msg.attach(part_text)
-        msg.attach(part_html)
-
-        # Connect to SMTP server
-        if smtp_port == 465:
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=12) as server:
-                server.login(sender_email, app_password)
-                server.send_message(msg)
-        else:
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=12) as server:
-                server.ehlo()
-                server.starttls()
-                server.ehlo()
-                server.login(sender_email, app_password)
-                server.send_message(msg)
-
-        logger.info("Email successfully sent via SMTP to: %s (from: %s) | Subject: %s", recipient, sender_email, subject)
-        return {
-            "success": True,
-            "simulated": False,
-            "recipient": recipient,
-            "sender": sender_email,
-            "subject": subject,
-            "message": f"Email successfully dispatched to user address: {recipient} (via platform sender: {sender_email})."
-        }
-    except Exception as exc:
-        logger.error("SMTP error sending email to %s: %s", recipient, exc)
-        return {
-            "success": False,
-            "simulated": False,
-            "recipient": recipient,
-            "subject": subject,
-            "error": str(exc),
-            "message": f"SMTP delivery failed: {exc}"
-        }
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +172,7 @@ def send_raw_email(recipient: str, subject: str, html_content: str, plain_text: 
 
 def generate_routine_reminder(user_name: str, trigger_reason: str, time_of_day: str = "morning") -> Dict[str, str]:
     if time_of_day.lower() == "evening":
-        subject = "🌙 Night Routine Reminder: Night-Time Skin Cellular Repair"
+        subject = "AI Skin Intelligence: Evening Routine Reminder"
         title = "Complete Your Evening Skincare Regimen"
         badge = "Evening Routine Alert"
         body = f"""
@@ -248,14 +182,14 @@ def generate_routine_reminder(user_name: str, trigger_reason: str, time_of_day: 
           <strong style="color: #4338ca;">Why Consistency Matters Tonight:</strong>
           <p style="margin: 6px 0 0 0; font-size: 14px;">
             While you sleep, skin blood flow increases and epidermal cell renewal peaks.
-            Applying your hydrating cleanser, treatment actives (e.g. retinoids/ceramides), and moisture lock ensures optimal overnight barrier recovery.
+            Applying your hydrating cleanser, treatment actives, and moisture lock ensures optimal overnight barrier recovery.
           </p>
         </div>
         <p><strong>Status:</strong> {trigger_reason}</p>
         <p>Take 2 minutes to complete your steps and maintain your skincare streak!</p>
         """
     else:
-        subject = "☀️ Morning Routine Reminder: Protect Your Skin Today"
+        subject = "AI Skin Intelligence: Morning Routine Reminder"
         title = "Start Your Day With Targeted Skin Protection"
         badge = "Morning Routine Alert"
         body = f"""
@@ -265,7 +199,7 @@ def generate_routine_reminder(user_name: str, trigger_reason: str, time_of_day: 
           <strong style="color: #4338ca;">Morning Regimen Focus:</strong>
           <p style="margin: 6px 0 0 0; font-size: 14px;">
             Morning routines shield your skin against environmental oxidants and UV exposure.
-            Don't forget your antioxidant serum (Vitamin C/Niacinamide) and broad-spectrum SPF 50+!
+            Don't forget your antioxidant serum and broad-spectrum SPF 50+!
           </p>
         </div>
         <p><strong>Status:</strong> {trigger_reason}</p>
@@ -281,7 +215,7 @@ def generate_routine_reminder(user_name: str, trigger_reason: str, time_of_day: 
 
 
 def generate_replenishment_reminder(user_name: str, trigger_reason: str, product_name: str = "Daily Essential Cleanser & SPF") -> Dict[str, str]:
-    subject = "🧴 Product Replenishment Alert: Don't Run Out of Your Essentials"
+    subject = "AI Skin Intelligence: Product Replenishment Advisory"
     title = "Time to Restock Your Skincare Regimen"
     badge = "Replenishment Advisory"
     body = f"""
@@ -308,7 +242,7 @@ def generate_replenishment_reminder(user_name: str, trigger_reason: str, product
 
 
 def generate_hydration_reminder(user_name: str, trigger_reason: str, target_water: str = "2.5 Liters") -> Dict[str, str]:
-    subject = "💧 Skin Hydration Reminder: Boost Your Moisture Barrier from Within"
+    subject = "AI Skin Intelligence: Hydration Reminder"
     title = "Hydrate for Healthy, Plump Skin"
     badge = "Hydration Performance"
     body = f"""
@@ -334,7 +268,7 @@ def generate_hydration_reminder(user_name: str, trigger_reason: str, target_wate
 
 
 def generate_sleep_reminder(user_name: str, trigger_reason: str, target_hours: str = "7-8 hours") -> Dict[str, str]:
-    subject = "🛌 Sleep & Recovery Reminder: Optimize Your Night-Time Beauty Sleep"
+    subject = "AI Skin Intelligence: Sleep & Recovery Reminder"
     title = "Skin Recovery Starts Tonight"
     badge = "Sleep & Recovery"
     body = f"""
@@ -361,7 +295,7 @@ def generate_sleep_reminder(user_name: str, trigger_reason: str, target_hours: s
 
 
 def generate_progress_alert(user_name: str, trigger_reason: str, score_delta: Optional[str] = "+5 pts") -> Dict[str, str]:
-    subject = "📈 Skincare Progress Alert: Your Latest Skin Health Milestones"
+    subject = "AI Skin Intelligence: Progress Update"
     title = "Your Skincare Journey Milestones"
     badge = "Progress Milestone"
     body = f"""
@@ -386,7 +320,7 @@ def generate_progress_alert(user_name: str, trigger_reason: str, score_delta: Op
 
 
 def generate_platform_notification(user_name: str, trigger_reason: str, custom_message: Optional[str] = None) -> Dict[str, str]:
-    subject = "📢 Skincare Platform Update: New Recommendations & Insights"
+    subject = "Update from AI Skin Intelligence"
     title = "Important Platform & Regimen Update"
     badge = "Platform Advisory"
     msg = custom_message or "New seasonal routine adaptations and dermatological recommendations are ready for review in your account."
@@ -411,6 +345,128 @@ def generate_platform_notification(user_name: str, trigger_reason: str, custom_m
 
 
 # ---------------------------------------------------------------------------
+# Dedicated Trigger Helpers (Registration, Appointment, Reset, Clinical)
+# ---------------------------------------------------------------------------
+
+def send_welcome_notification(user_email: str, user_name: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+    """Dispatches a welcome and onboarding notification via Courier."""
+    subject = "Welcome to AI Skin Intelligence"
+    title = "Welcome to AI Skin Intelligence"
+    badge = "Welcome"
+    body = f"""
+    <p>Hello <strong>{user_name}</strong>,</p>
+    <p>Thank you for joining AI Skin Intelligence! Your account is active and ready to use.</p>
+    <div class="highlight-card">
+      <strong style="color: #4338ca;">Getting Started:</strong>
+      <p style="margin: 6px 0 0 0; font-size: 14px;">
+        1. Complete your baseline skin assessment.<br>
+        2. Explore your personalized routine recommendations.<br>
+        3. Track your daily skincare consistency and milestones.
+      </p>
+    </div>
+    <p>We're thrilled to support you on your skincare journey.</p>
+    """
+    html = create_base_email_template(
+        title=title,
+        badge=badge,
+        content_html=body,
+        action_button_text="Open Dashboard",
+        action_url="http://127.0.0.1:8000/user/user.html"
+    )
+    return send_email_notification(recipient_email=user_email, subject=subject, html_content=html, user_id=user_id)
+
+
+def send_appointment_reminder(
+    user_email: str,
+    user_name: str,
+    appointment_time: str,
+    doctor_name: str = "Clinical Consultant",
+    user_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """Dispatches an appointment or consultation reminder via Courier."""
+    subject = "Appointment reminder from AI Skin Intelligence"
+    title = "Upcoming Consultation Reminder"
+    badge = "Consultation"
+    body = f"""
+    <p>Hello <strong>{user_name}</strong>,</p>
+    <p>This is a reminder of your scheduled consultation session.</p>
+    <div class="highlight-card" style="border-left-color: #3b82f6;">
+      <strong style="color: #1d4ed8;">Session Details:</strong>
+      <p style="margin: 6px 0 0 0; font-size: 14px;">
+        <strong>Specialist:</strong> {doctor_name}<br>
+        <strong>Scheduled Time:</strong> {appointment_time}<br>
+        <strong>Format:</strong> Virtual Consultation
+      </p>
+    </div>
+    <p>Please log in a few minutes prior to the session to review your latest notes.</p>
+    """
+    html = create_base_email_template(
+        title=title,
+        badge=badge,
+        content_html=body,
+        action_button_text="View Details",
+        action_url="http://127.0.0.1:8000/user/user.html"
+    )
+    return send_email_notification(recipient_email=user_email, subject=subject, html_content=html, user_id=user_id)
+
+
+def send_password_reset_notification(user_email: str, reset_link: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+    """Dispatches a secure password reset link via Courier."""
+    subject = "Security update from AI Skin Intelligence"
+    title = "Password Reset Request"
+    badge = "Security"
+    body = f"""
+    <p>Hello,</p>
+    <p>We received a request to reset your password for AI Skin Intelligence.</p>
+    <div class="highlight-card" style="border-left-color: #ef4444;">
+      <strong style="color: #b91c1c;">Security Notice:</strong>
+      <p style="margin: 6px 0 0 0; font-size: 14px;">
+        If you did not request this change, please ignore this message. The reset link will expire shortly.
+      </p>
+    </div>
+    """
+    html = create_base_email_template(
+        title=title,
+        badge=badge,
+        content_html=body,
+        action_button_text="Reset Password",
+        action_url=reset_link
+    )
+    return send_email_notification(recipient_email=user_email, subject=subject, html_content=html, user_id=user_id)
+
+
+def send_clinical_update_notification(
+    patient_email: str,
+    patient_name: str,
+    update_title: str,
+    user_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """Dispatches a clinical care update notification to a patient via Courier."""
+    subject = "Update from AI Skin Intelligence"
+    title = "Clinical Regimen Update"
+    badge = "Clinical Advisory"
+    body = f"""
+    <p>Hello <strong>{patient_name}</strong>,</p>
+    <p>Your consulting dermatologist has updated your clinical care notes and recommendations.</p>
+    <div class="highlight-card" style="border-left-color: #10b981;">
+      <strong style="color: #047857;">Notice:</strong>
+      <p style="margin: 6px 0 0 0; font-size: 14px;">
+        {update_title}
+      </p>
+    </div>
+    <p>Please log in to your patient portal to review your updated routine instructions.</p>
+    """
+    html = create_base_email_template(
+        title=title,
+        badge=badge,
+        content_html=body,
+        action_button_text="Inspect Portal",
+        action_url="http://127.0.0.1:8000/user/user.html"
+    )
+    return send_email_notification(recipient_email=patient_email, subject=subject, html_content=html, user_id=user_id)
+
+
+# ---------------------------------------------------------------------------
 # Universal Dispatcher Function
 # ---------------------------------------------------------------------------
 
@@ -423,7 +479,7 @@ def dispatch_user_reminder(
 ) -> Dict[str, Any]:
     """
     Dispatches an email reminder for the specified category if the user
-    has email push notifications enabled.
+    has email push notifications enabled, using the official Courier Python SDK.
     """
     # Enforce Rule: Send through email only when user enabled push notifications
     if not getattr(user, "push_notifications_email", True):
@@ -469,15 +525,22 @@ def dispatch_user_reminder(
     html = template_res["html"]
 
     recipient = (extra_data.get("recipient_email") or getattr(user, "email", "")).strip().lower()
+    user_id_val = str(getattr(user, "id", "")) if getattr(user, "id", None) else None
 
-    # Send through Python email module & smtplib
-    result = send_raw_email(recipient, subject, html)
+    # Send through official Courier Python SDK (delivered via connected Gmail integration)
+    result = send_email_notification(
+        recipient_email=recipient,
+        subject=subject,
+        html_content=html,
+        user_id=user_id_val
+    )
 
     # Log in database if db session provided
     if db:
         try:
             from app.models import UserReminderLog
-            log_status = "sent" if (result.get("success") and not result.get("simulated")) else ("simulated" if result.get("simulated") else "failed")
+            log_status = "sent" if result.get("success") else "failed"
+            courier_req_id = result.get("request_id")
             log_entry = UserReminderLog(
                 user_id=user.id,
                 reminder_type=category,
@@ -485,6 +548,7 @@ def dispatch_user_reminder(
                 channel="email",
                 subject=subject[:250],
                 status=log_status,
+                courier_request_id=courier_req_id,
                 sent_at=datetime.now(timezone.utc)
             )
             db.add(log_entry)
@@ -495,3 +559,4 @@ def dispatch_user_reminder(
     result["reminder_type"] = category
     result["trigger_reason"] = trigger_reason
     return result
+
