@@ -58,8 +58,6 @@ const verifyDermatologist = async () => {
     }
 
     currentDerm = data;
-    const nameEl = document.getElementById('sidebarDermName');
-    if (nameEl) nameEl.textContent = `Dr. ${data.email.split('@')[0]}`;
 
     // Verify approval status
     const statusRes = await fetch('/auth/status', {
@@ -70,6 +68,9 @@ const verifyDermatologist = async () => {
       showStatusOverlay(statusData.status, data.email);
       return;
     }
+
+    // Load dermatologist account profile
+    await fetchDermatologistProfile(token, data.email);
 
     // Load main dashboard data
     await refreshAllData();
@@ -1188,7 +1189,258 @@ async function downloadDermReport(reportType, format) {
 }
 window.downloadDermReport = downloadDermReport;
 
-// ── Startup ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+// Dermatologist Profile Management
+// ═══════════════════════════════════════════════════════════════════
+let currentDermatologistProfile = null;
+
+const updateDermatologistDisplay = (profile, fallbackEmail) => {
+  let displayName = '';
+  let initials = 'Dr';
+  let spec = 'Board Certified Specialist';
+
+  if (profile) {
+    if (profile.first_name || profile.last_name) {
+      displayName = `Dr. ${[profile.first_name, profile.last_name].filter(Boolean).join(' ')}`.trim();
+    } else if (profile.name) {
+      displayName = profile.name.toLowerCase().startsWith('dr') ? profile.name : `Dr. ${profile.name}`;
+    }
+    if (profile.first_name) {
+      initials = profile.first_name.charAt(0).toUpperCase();
+      if (profile.last_name) initials += profile.last_name.charAt(0).toUpperCase();
+    } else if (profile.name) {
+      const parts = profile.name.trim().split(/\s+/);
+      initials = parts.map(p => p.charAt(0).toUpperCase()).slice(0, 2).join('') || 'Dr';
+    }
+    if (profile.specialization) {
+      spec = profile.specialization;
+    }
+  }
+
+  if (!displayName && fallbackEmail) {
+    const handle = fallbackEmail.split('@')[0];
+    displayName = `Dr. ${handle.charAt(0).toUpperCase() + handle.slice(1)}`;
+  }
+
+  const nameEl = document.getElementById('sidebarDermName');
+  if (nameEl) nameEl.textContent = displayName || 'Dr. Dermatologist';
+
+  const specEl = document.getElementById('sidebarDermSpecialization');
+  if (specEl) specEl.textContent = spec;
+
+  const avatarEl = document.getElementById('sidebarDermAvatar');
+  if (avatarEl) avatarEl.textContent = initials || 'Dr';
+
+  const cardAvatar = document.getElementById('dermProfileCardAvatar');
+  if (cardAvatar) cardAvatar.textContent = initials || 'Dr';
+  const headerAvatar = document.getElementById('dermProfileHeaderAvatar');
+  if (headerAvatar) headerAvatar.textContent = initials || 'Dr';
+  const cardFullName = document.getElementById('dermProfileCardFullName');
+  if (cardFullName) cardFullName.textContent = displayName || 'Dr. Dermatologist';
+  const cardEmail = document.getElementById('dermProfileCardEmail');
+  if (cardEmail && profile?.email) cardEmail.textContent = profile.email;
+  const licenseTag = document.getElementById('dermProfileCardLicenseTag');
+  if (licenseTag) {
+    licenseTag.textContent = profile?.license_number ? `License: ${profile.license_number}` : 'License: Verified Practitioner';
+  }
+};
+
+const fetchDermatologistProfile = async (tkn, fallbackEmail) => {
+  try {
+    let res = await fetch('/dermatologist/account-profile', {
+      headers: { Authorization: `Bearer ${tkn}` },
+    });
+    if (res.ok) {
+      currentDermatologistProfile = await res.json();
+      updateDermatologistDisplay(currentDermatologistProfile, fallbackEmail);
+      return currentDermatologistProfile;
+    }
+    res = await fetch('/auth/profile', {
+      headers: { Authorization: `Bearer ${tkn}` },
+    });
+    if (res.ok) {
+      currentDermatologistProfile = await res.json();
+      updateDermatologistDisplay(currentDermatologistProfile, fallbackEmail);
+      return currentDermatologistProfile;
+    }
+  } catch (err) {
+    console.error('Error fetching dermatologist profile:', err);
+    if (fallbackEmail) updateDermatologistDisplay(null, fallbackEmail);
+  }
+};
+
+const showDermProfileAlert = (msg, type = 'info') => {
+  const alert = document.getElementById('dermProfileAlert');
+  if (!alert) return;
+  alert.className = `account-profile-alert ${type}`;
+  alert.textContent = msg;
+  alert.classList.remove('hidden');
+};
+
+const hideDermProfileAlert = () => {
+  const alert = document.getElementById('dermProfileAlert');
+  if (alert) alert.classList.add('hidden');
+};
+
+const openDermatologistProfileModal = async () => {
+  const modal = document.getElementById('dermatologistProfileModal');
+  if (!modal) return;
+
+  hideDermProfileAlert();
+  modal.classList.remove('hidden');
+
+  if (!token) return;
+
+  try {
+    const res = await fetch('/dermatologist/account-profile', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      currentDermatologistProfile = await res.json();
+    }
+  } catch (err) {
+    console.error('Error refreshing dermatologist profile:', err);
+  }
+
+  const data = currentDermatologistProfile || {};
+  const fnInput = document.getElementById('dermProfileFirstName');
+  const lnInput = document.getElementById('dermProfileLastName');
+  const emailInput = document.getElementById('dermProfileEmail');
+  const phoneInput = document.getElementById('dermProfilePhoneNumber');
+  const licInput = document.getElementById('dermProfileLicense');
+  const specInput = document.getElementById('dermProfileSpecialization');
+  const joinedEl = document.getElementById('dermProfileCardJoinedDate');
+  const statusBadge = document.getElementById('dermProfileCardStatusBadge');
+
+  if (fnInput) fnInput.value = data.first_name || '';
+  if (lnInput) lnInput.value = data.last_name || '';
+  if (emailInput) emailInput.value = data.email || (currentDerm ? currentDerm.email : '');
+  if (phoneInput) phoneInput.value = data.phone_number || '';
+  if (licInput) licInput.value = data.license_number || '';
+  if (specInput) specInput.value = data.specialization || 'Clinical Dermatology';
+
+  if (statusBadge) {
+    statusBadge.textContent = (data.status || 'Active').toUpperCase();
+  }
+
+  if (joinedEl && data.created_at) {
+    try {
+      const dt = new Date(data.created_at);
+      joinedEl.textContent = `Practicing since ${dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}`;
+    } catch (_) {
+      joinedEl.textContent = 'Specialist Practitioner';
+    }
+  }
+
+  updateDermatologistDisplay(data, data.email || currentDerm?.email);
+};
+
+const closeDermatologistProfileModal = () => {
+  const modal = document.getElementById('dermatologistProfileModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    hideDermProfileAlert();
+  }
+};
+
+const handleSaveDermatologistProfile = async (e) => {
+  if (e) e.preventDefault();
+  if (!token) {
+    showDermProfileAlert('Session expired. Please log in again.', 'error');
+    return;
+  }
+
+  const fnInput = document.getElementById('dermProfileFirstName');
+  const lnInput = document.getElementById('dermProfileLastName');
+  const emailInput = document.getElementById('dermProfileEmail');
+  const phoneInput = document.getElementById('dermProfilePhoneNumber');
+  const licInput = document.getElementById('dermProfileLicense');
+  const specInput = document.getElementById('dermProfileSpecialization');
+  const saveBtn = document.getElementById('btnSaveDermProfile');
+  const spinner = document.getElementById('saveDermProfileSpinner');
+
+  const firstName = fnInput ? fnInput.value.trim() : '';
+  const lastName = lnInput ? lnInput.value.trim() : '';
+  const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
+  const phoneNumber = phoneInput ? phoneInput.value.trim() : '';
+  const licenseNumber = licInput ? licInput.value.trim() : '';
+  const specialization = specInput ? specInput.value.trim() : '';
+
+  if (!firstName) {
+    showDermProfileAlert('Please enter your first name.', 'error');
+    if (fnInput) fnInput.focus();
+    return;
+  }
+  if (!email || !email.includes('@')) {
+    showDermProfileAlert('Please enter a valid email address.', 'error');
+    if (emailInput) emailInput.focus();
+    return;
+  }
+
+  if (saveBtn) saveBtn.disabled = true;
+  if (spinner) spinner.classList.remove('hidden');
+  hideDermProfileAlert();
+
+  try {
+    const res = await fetch('/dermatologist/account-profile', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        first_name: firstName,
+        last_name: lastName,
+        email: email,
+        phone_number: phoneNumber,
+        license_number: licenseNumber,
+        specialization: specialization || 'Clinical Dermatology',
+      }),
+    });
+
+    const result = await res.json().catch(() => ({}));
+
+    if (res.ok) {
+      if (result.access_token) {
+        localStorage.setItem('access_token', result.access_token);
+      }
+      currentDermatologistProfile = result;
+      if (currentDerm) currentDerm.email = result.email;
+      updateDermatologistDisplay(result, email);
+      showDermProfileAlert('✓ Doctor credentials & practice profile saved successfully!', 'success');
+    } else {
+      showDermProfileAlert(result.detail || 'Failed to save profile. Please try again.', 'error');
+    }
+  } catch (err) {
+    console.error('Error saving dermatologist profile:', err);
+    showDermProfileAlert('An error occurred while saving profile. Please try again.', 'error');
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+    if (spinner) spinner.classList.add('hidden');
+  }
+};
+
+window.openDermatologistProfileModal = openDermatologistProfileModal;
+window.closeDermatologistProfileModal = closeDermatologistProfileModal;
+
+// ── Startup & Profile Event Listeners ────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   verifyDermatologist();
+
+  const sidebarUserInfo = document.getElementById('sidebarUserInfo');
+  if (sidebarUserInfo) {
+    sidebarUserInfo.addEventListener('click', openDermatologistProfileModal);
+    sidebarUserInfo.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openDermatologistProfileModal();
+      }
+    });
+  }
+
+  document.getElementById('btnCloseDermProfileModal')?.addEventListener('click', closeDermatologistProfileModal);
+  document.getElementById('btnCancelDermProfile')?.addEventListener('click', closeDermatologistProfileModal);
+  document.getElementById('dermProfileModalBackdrop')?.addEventListener('click', closeDermatologistProfileModal);
+  document.getElementById('dermProfileForm')?.addEventListener('submit', handleSaveDermatologistProfile);
 });
+

@@ -34,6 +34,105 @@
     <!-- Toast Notification Container -->
     <div id="toastContainer" class="toast-container"></div>
 
+    <!-- Dermatologist Profile & Credentials Modal -->
+    <div id="dermatologistProfileModal" class="profile-modal hidden" role="dialog" aria-labelledby="dermProfileModalTitle" aria-modal="true">
+      <div class="profile-modal-backdrop" id="dermProfileModalBackdrop"></div>
+      <div class="profile-modal-card account-profile-modal-card">
+        <!-- Header -->
+        <div class="modal-card-header">
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <div class="profile-header-avatar" id="dermProfileHeaderAvatar">Dr</div>
+            <div>
+              <h2 id="dermProfileModalTitle" class="profile-modal-name">Doctor Profile &amp; Credentials</h2>
+              <p class="profile-modal-subtitle">Manage clinical credentials, contact info &amp; practice details</p>
+            </div>
+          </div>
+          <button type="button" id="btnCloseDermProfileModal" class="profile-modal-close" aria-label="Close modal">&times;</button>
+        </div>
+
+        <!-- Body / Form -->
+        <form id="dermProfileForm" class="account-profile-form">
+          <!-- Doctor Summary Card Banner -->
+          <div class="account-summary-card derm-banner">
+            <div class="account-summary-left">
+              <div class="account-summary-avatar" id="dermProfileCardAvatar">Dr</div>
+              <div>
+                <div class="account-summary-title-row">
+                  <h3 id="dermProfileCardFullName" class="account-summary-name">Dr. Dermatologist</h3>
+                  <span id="dermProfileCardStatusBadge" class="account-status-badge">ACTIVE</span>
+                </div>
+                <p id="dermProfileCardEmail" class="account-summary-email">doctor@example.com</p>
+                <div class="account-summary-tags">
+                  <span class="account-tag" id="dermProfileCardLicenseTag">License: Verified</span>
+                  <span class="account-tag-sub" id="dermProfileCardJoinedDate">Member Specialist</span>
+                </div>
+              </div>
+            </div>
+            <div class="account-summary-right">
+              <span class="account-badge-label">Clinical Authorization</span>
+              <span class="account-badge-verified">
+                <span class="status-indicator-dot"></span>
+                Board Certified Specialist
+              </span>
+            </div>
+          </div>
+
+          <!-- Feedback Alert Banner -->
+          <div id="dermProfileAlert" class="account-profile-alert hidden"></div>
+
+          <!-- Personal & Professional Fields -->
+          <div class="account-form-section">
+            <h4 class="account-section-title">🩺 Clinical Practitioner Details</h4>
+            
+            <div class="account-form-grid">
+              <div class="form-group mb-0">
+                <label for="dermProfileFirstName" class="account-label">
+                  First Name <span class="required-star">*</span>
+                </label>
+                <input type="text" id="dermProfileFirstName" class="account-input" placeholder="e.g. Sarah" required />
+              </div>
+
+              <div class="form-group mb-0">
+                <label for="dermProfileLastName" class="account-label">Last Name</label>
+                <input type="text" id="dermProfileLastName" class="account-input" placeholder="e.g. Jenkins" />
+              </div>
+
+              <div class="form-group mb-0">
+                <label for="dermProfileEmail" class="account-label">
+                  Email Address <span class="required-star">*</span>
+                </label>
+                <input type="email" id="dermProfileEmail" class="account-input" placeholder="doctor@clinic.com" required />
+              </div>
+
+              <div class="form-group mb-0">
+                <label for="dermProfilePhoneNumber" class="account-label">Phone Number</label>
+                <input type="tel" id="dermProfilePhoneNumber" class="account-input" placeholder="+1 (555) 234-5678" />
+              </div>
+
+              <div class="form-group mb-0">
+                <label for="dermProfileLicense" class="account-label">Medical License Number</label>
+                <input type="text" id="dermProfileLicense" class="account-input" placeholder="e.g. MD-982415" />
+              </div>
+
+              <div class="form-group mb-0">
+                <label for="dermProfileSpecialization" class="account-label">Clinical Specialization</label>
+                <input type="text" id="dermProfileSpecialization" class="account-input" placeholder="e.g. Clinical &amp; Aesthetic Dermatology" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Modal Action Buttons -->
+          <div class="account-modal-actions">
+            <button type="button" id="btnCancelDermProfile" class="btn-account-cancel">Cancel</button>
+            <button type="submit" id="btnSaveDermProfile" class="btn-account-save">
+              <span id="saveDermProfileSpinner" class="spinner-small hidden"></span>
+              <span>Save Profile Changes</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Comprehensive Patient Medical Report Modal -->
     <div id="patientModal" class="profile-modal hidden">
       <div class="profile-modal-backdrop" id="modalBackdrop"></div>
@@ -461,12 +560,13 @@
         </nav>
 
         <div class="sidebar-footer">
-          <div class="user-info">
-            <div class="avatar-circle">Dr</div>
+          <div class="user-info user-profile-trigger" id="sidebarUserInfo" role="button" tabindex="0" title="Click to view &amp; edit your profile">
+            <div class="avatar-circle" id="sidebarDermAvatar">Dr</div>
             <div class="user-details truncate">
               <span id="sidebarDermName" class="user-name truncate">Dr. Dermatologist</span>
-              <span class="user-role">Board Certified Specialist</span>
+              <span id="sidebarDermSpecialization" class="user-role truncate">Board Certified Specialist</span>
             </div>
+            <div class="profile-edit-indicator" title="Edit Profile">✏️</div>
           </div>
           <a href="../index.html" class="sidebar-logout-btn" id="headerLogout" title="Logout">
             <span>Logout</span>

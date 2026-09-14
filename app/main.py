@@ -211,9 +211,12 @@ class UserProfileResponse(BaseModel):
     last_name: Optional[str] = ""
     email: str
     phone_number: Optional[str] = ""
+    specialization: Optional[str] = ""
+    license_number: Optional[str] = ""
     push_notifications_mobile: Optional[bool] = True
     push_notifications_email: Optional[bool] = True
     role: str
+    status: Optional[str] = "approved"
     created_at: Optional[datetime] = None
 
 
@@ -238,6 +241,51 @@ class UserAccountProfileUpdateRequest(BaseModel):
     phone_number: Optional[str] = ""
     push_notifications_mobile: Optional[bool] = True
     push_notifications_email: Optional[bool] = True
+
+
+class ConsultantAccountProfileResponse(BaseModel):
+    id: int
+    name: Optional[str] = ""
+    first_name: Optional[str] = ""
+    last_name: Optional[str] = ""
+    email: str
+    phone_number: Optional[str] = ""
+    specialization: Optional[str] = "Skincare Specialist"
+    status: str = "approved"
+    created_at: Optional[datetime] = None
+    access_token: Optional[str] = None
+
+
+class ConsultantAccountProfileUpdateRequest(BaseModel):
+    first_name: Optional[str] = ""
+    last_name: Optional[str] = ""
+    email: Optional[EmailStr] = None
+    phone_number: Optional[str] = ""
+    specialization: Optional[str] = ""
+
+
+class DermatologistAccountProfileResponse(BaseModel):
+    id: int
+    name: Optional[str] = ""
+    first_name: Optional[str] = ""
+    last_name: Optional[str] = ""
+    email: str
+    phone_number: Optional[str] = ""
+    license_number: Optional[str] = ""
+    specialization: Optional[str] = "Clinical Dermatology"
+    status: str = "approved"
+    created_at: Optional[datetime] = None
+    access_token: Optional[str] = None
+
+
+class DermatologistAccountProfileUpdateRequest(BaseModel):
+    first_name: Optional[str] = ""
+    last_name: Optional[str] = ""
+    email: Optional[EmailStr] = None
+    phone_number: Optional[str] = ""
+    license_number: Optional[str] = ""
+    specialization: Optional[str] = ""
+
 
 
 class PushNotificationRequest(BaseModel):
@@ -1328,9 +1376,12 @@ async def get_profile(
         last_name=getattr(record, "last_name", "") or "",
         email=record.email,
         phone_number=getattr(record, "phone_number", "") or "",
+        specialization=getattr(record, "specialization", "") or "",
+        license_number=getattr(record, "license_number", "") or "",
         push_notifications_mobile=getattr(record, "push_notifications_mobile", True),
         push_notifications_email=getattr(record, "push_notifications_email", True),
         role=current_user.role,
+        status=getattr(record, "status", "approved") or "approved",
         created_at=record.created_at,
     )
 
@@ -1388,8 +1439,11 @@ async def update_user_account_profile(
     if update_data.email:
         new_email = update_data.email.strip().lower()
         if new_email != user_record.email.lower():
-            existing_user = db.query(User).filter(User.email == new_email).first()
-            if existing_user and existing_user.id != user_record.id:
+            if (
+                db.query(User).filter(User.email == new_email).first()
+                or db.query(Consultant).filter(Consultant.email == new_email).first()
+                or db.query(Dermatologist).filter(Dermatologist.email == new_email).first()
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="This email address is already in use by another account",
@@ -1433,6 +1487,206 @@ async def update_user_account_profile(
         push_notifications_email=bool(user_record.push_notifications_email),
         status=user_record.status or "approved",
         created_at=user_record.created_at,
+        access_token=new_token,
+    )
+
+
+# ── Consultant Account Profile Endpoints ──────────────────────
+@app.get("/consultant/account-profile", response_model=ConsultantAccountProfileResponse)
+async def get_consultant_account_profile(
+    current_user: UserPayload = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ConsultantAccountProfileResponse:
+    if current_user.role not in ["consultant", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only consultants can access consultant account profile",
+        )
+    consultant = db.query(Consultant).filter(Consultant.email == current_user.email).first()
+    if not consultant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Consultant account not found",
+        )
+    return ConsultantAccountProfileResponse(
+        id=consultant.id,
+        name=consultant.name or "",
+        first_name=consultant.first_name or "",
+        last_name=consultant.last_name or "",
+        email=consultant.email,
+        phone_number=consultant.phone_number or "",
+        specialization=consultant.specialization or "Skincare Specialist",
+        status=consultant.status or "approved",
+        created_at=consultant.created_at,
+    )
+
+
+@app.put("/consultant/account-profile", response_model=ConsultantAccountProfileResponse)
+async def update_consultant_account_profile(
+    update_data: ConsultantAccountProfileUpdateRequest,
+    current_user: UserPayload = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ConsultantAccountProfileResponse:
+    if current_user.role != "consultant":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only consultants can update consultant profile",
+        )
+    consultant = db.query(Consultant).filter(Consultant.email == current_user.email).first()
+    if not consultant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Consultant account not found",
+        )
+
+    new_token = None
+    if update_data.email:
+        new_email = update_data.email.strip().lower()
+        if new_email != consultant.email.lower():
+            if (
+                db.query(Consultant).filter(Consultant.email == new_email).first()
+                or db.query(User).filter(User.email == new_email).first()
+                or db.query(Dermatologist).filter(Dermatologist.email == new_email).first()
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="This email address is already in use by another account",
+                )
+            consultant.email = new_email
+            new_token = create_access_token(consultant.email, "consultant")
+
+    if update_data.first_name is not None:
+        consultant.first_name = update_data.first_name.strip()
+    if update_data.last_name is not None:
+        consultant.last_name = update_data.last_name.strip()
+
+    full_name = f"{consultant.first_name or ''} {consultant.last_name or ''}".strip()
+    if full_name:
+        consultant.name = full_name
+    elif not consultant.name and consultant.first_name:
+        consultant.name = consultant.first_name
+
+    if update_data.phone_number is not None:
+        consultant.phone_number = update_data.phone_number.strip()
+    if update_data.specialization is not None:
+        consultant.specialization = update_data.specialization.strip()
+
+    db.add(consultant)
+    db.commit()
+    db.refresh(consultant)
+
+    return ConsultantAccountProfileResponse(
+        id=consultant.id,
+        name=consultant.name or "",
+        first_name=consultant.first_name or "",
+        last_name=consultant.last_name or "",
+        email=consultant.email,
+        phone_number=consultant.phone_number or "",
+        specialization=consultant.specialization or "Skincare Specialist",
+        status=consultant.status or "approved",
+        created_at=consultant.created_at,
+        access_token=new_token,
+    )
+
+
+# ── Dermatologist Account Profile Endpoints ──────────────────
+@app.get("/dermatologist/account-profile", response_model=DermatologistAccountProfileResponse)
+async def get_dermatologist_account_profile(
+    current_user: UserPayload = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DermatologistAccountProfileResponse:
+    if current_user.role not in ["dermatologist", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only dermatologists can access dermatologist account profile",
+        )
+    derm = db.query(Dermatologist).filter(Dermatologist.email == current_user.email).first()
+    if not derm:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Dermatologist account not found",
+        )
+    return DermatologistAccountProfileResponse(
+        id=derm.id,
+        name=derm.name or "",
+        first_name=derm.first_name or "",
+        last_name=derm.last_name or "",
+        email=derm.email,
+        phone_number=derm.phone_number or "",
+        license_number=derm.license_number or "",
+        specialization=derm.specialization or "Clinical Dermatology",
+        status=derm.status or "approved",
+        created_at=derm.created_at,
+    )
+
+
+@app.put("/dermatologist/account-profile", response_model=DermatologistAccountProfileResponse)
+async def update_dermatologist_account_profile(
+    update_data: DermatologistAccountProfileUpdateRequest,
+    current_user: UserPayload = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DermatologistAccountProfileResponse:
+    if current_user.role != "dermatologist":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only dermatologists can update dermatologist profile",
+        )
+    derm = db.query(Dermatologist).filter(Dermatologist.email == current_user.email).first()
+    if not derm:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Dermatologist account not found",
+        )
+
+    new_token = None
+    if update_data.email:
+        new_email = update_data.email.strip().lower()
+        if new_email != derm.email.lower():
+            if (
+                db.query(Dermatologist).filter(Dermatologist.email == new_email).first()
+                or db.query(User).filter(User.email == new_email).first()
+                or db.query(Consultant).filter(Consultant.email == new_email).first()
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="This email address is already in use by another account",
+                )
+            derm.email = new_email
+            new_token = create_access_token(derm.email, "dermatologist")
+
+    if update_data.first_name is not None:
+        derm.first_name = update_data.first_name.strip()
+    if update_data.last_name is not None:
+        derm.last_name = update_data.last_name.strip()
+
+    full_name = f"{derm.first_name or ''} {derm.last_name or ''}".strip()
+    if full_name:
+        derm.name = full_name
+    elif not derm.name and derm.first_name:
+        derm.name = derm.first_name
+
+    if update_data.phone_number is not None:
+        derm.phone_number = update_data.phone_number.strip()
+    if update_data.license_number is not None:
+        derm.license_number = update_data.license_number.strip()
+    if update_data.specialization is not None:
+        derm.specialization = update_data.specialization.strip()
+
+    db.add(derm)
+    db.commit()
+    db.refresh(derm)
+
+    return DermatologistAccountProfileResponse(
+        id=derm.id,
+        name=derm.name or "",
+        first_name=derm.first_name or "",
+        last_name=derm.last_name or "",
+        email=derm.email,
+        phone_number=derm.phone_number or "",
+        license_number=derm.license_number or "",
+        specialization=derm.specialization or "Clinical Dermatology",
+        status=derm.status or "approved",
+        created_at=derm.created_at,
         access_token=new_token,
     )
 

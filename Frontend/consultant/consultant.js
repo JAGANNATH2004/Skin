@@ -123,25 +123,80 @@ const escapeHtml = (str) => {
 };
 
 // ── Auth Guard & Profile ─────────────────────────────────────
+let currentConsultantAccountProfile = null;
+
+const updateConsultantDisplay = (profile, fallbackEmail) => {
+  let displayName = '';
+  let initials = 'C';
+  let spec = 'Certified Aesthetic Advisor';
+
+  if (profile) {
+    if (profile.first_name || profile.last_name) {
+      displayName = [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim();
+    } else if (profile.name) {
+      displayName = profile.name.trim();
+    }
+    if (profile.first_name) {
+      initials = profile.first_name.charAt(0).toUpperCase();
+      if (profile.last_name) initials += profile.last_name.charAt(0).toUpperCase();
+    } else if (profile.name) {
+      const parts = profile.name.trim().split(/\s+/);
+      initials = parts.map(p => p.charAt(0).toUpperCase()).slice(0, 2).join('') || 'C';
+    }
+    if (profile.specialization) {
+      spec = profile.specialization;
+    }
+  }
+
+  if (!displayName && fallbackEmail) {
+    const handle = fallbackEmail.split('@')[0];
+    displayName = handle.charAt(0).toUpperCase() + handle.slice(1);
+  }
+
+  const nameEl = document.getElementById('sidebarConsultantName');
+  if (nameEl) nameEl.textContent = displayName || 'Consultant Specialist';
+
+  const specEl = document.getElementById('sidebarConsultantSpecialization');
+  if (specEl) specEl.textContent = spec;
+
+  const avatarEl = document.getElementById('sidebarConsultantAvatar');
+  if (avatarEl) avatarEl.textContent = initials || 'C';
+
+  const cardAvatar = document.getElementById('consultantProfileCardAvatar');
+  if (cardAvatar) cardAvatar.textContent = initials || 'C';
+  const headerAvatar = document.getElementById('consultantProfileHeaderAvatar');
+  if (headerAvatar) headerAvatar.textContent = initials || 'C';
+  const cardFullName = document.getElementById('consultantProfileCardFullName');
+  if (cardFullName) cardFullName.textContent = displayName || 'Skincare Consultant';
+  const cardEmail = document.getElementById('consultantProfileCardEmail');
+  if (cardEmail && profile?.email) cardEmail.textContent = profile.email;
+  const specTag = document.getElementById('consultantProfileCardSpecTag');
+  if (specTag) {
+    specTag.textContent = spec;
+  }
+};
+
 const fetchConsultantProfile = async (tkn, fallbackEmail) => {
   try {
-    const res = await fetch('/auth/profile', {
+    let res = await fetch('/consultant/account-profile', {
       headers: { Authorization: `Bearer ${tkn}` },
     });
     if (res.ok) {
-      const data = await res.json();
-      let displayName = data.name ? data.name.trim() : '';
-      if (!displayName && fallbackEmail) {
-        const handle = fallbackEmail.split('@')[0];
-        displayName = handle.charAt(0).toUpperCase() + handle.slice(1);
-      }
-      const sidebarNameEl = document.getElementById('sidebarConsultantName');
-      if (sidebarNameEl) {
-        sidebarNameEl.textContent = displayName || 'Consultant Specialist';
-      }
+      currentConsultantAccountProfile = await res.json();
+      updateConsultantDisplay(currentConsultantAccountProfile, fallbackEmail);
+      return currentConsultantAccountProfile;
+    }
+    res = await fetch('/auth/profile', {
+      headers: { Authorization: `Bearer ${tkn}` },
+    });
+    if (res.ok) {
+      currentConsultantAccountProfile = await res.json();
+      updateConsultantDisplay(currentConsultantAccountProfile, fallbackEmail);
+      return currentConsultantAccountProfile;
     }
   } catch (err) {
     console.error('Error fetching consultant profile:', err);
+    if (fallbackEmail) updateConsultantDisplay(null, fallbackEmail);
   }
 };
 
@@ -1650,6 +1705,186 @@ async function downloadConsultantReport(reportType, format) {
 }
 window.downloadConsultantReport = downloadConsultantReport;
 
+// ═══════════════════════════════════════════════════════════════════
+// Consultant Profile Management Modal & Events
+// ═══════════════════════════════════════════════════════════════════
+
+const showConsultantProfileAlert = (msg, type = 'info') => {
+  const alert = document.getElementById('consultantProfileAlert');
+  if (!alert) return;
+  alert.className = `account-profile-alert ${type}`;
+  alert.textContent = msg;
+  alert.classList.remove('hidden');
+};
+
+const hideConsultantProfileAlert = () => {
+  const alert = document.getElementById('consultantProfileAlert');
+  if (alert) alert.classList.add('hidden');
+};
+
+const openConsultantProfileModal = async () => {
+  const modal = document.getElementById('consultantProfileModal');
+  if (!modal) return;
+
+  hideConsultantProfileAlert();
+  modal.classList.remove('hidden');
+
+  if (!token) return;
+
+  try {
+    const res = await fetch('/consultant/account-profile', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      currentConsultantAccountProfile = await res.json();
+    }
+  } catch (err) {
+    console.error('Error refreshing consultant profile:', err);
+  }
+
+  const data = currentConsultantAccountProfile || {};
+  const fnInput = document.getElementById('consultantProfileFirstName');
+  const lnInput = document.getElementById('consultantProfileLastName');
+  const emailInput = document.getElementById('consultantProfileEmail');
+  const phoneInput = document.getElementById('consultantProfilePhoneNumber');
+  const specInput = document.getElementById('consultantProfileSpecialization');
+  const joinedEl = document.getElementById('consultantProfileCardJoinedDate');
+  const statusBadge = document.getElementById('consultantProfileCardStatusBadge');
+
+  if (fnInput) fnInput.value = data.first_name || '';
+  if (lnInput) lnInput.value = data.last_name || '';
+  if (emailInput) emailInput.value = data.email || '';
+  if (phoneInput) phoneInput.value = data.phone_number || '';
+  if (specInput) specInput.value = data.specialization || 'Certified Aesthetic Advisor';
+
+  if (statusBadge) {
+    statusBadge.textContent = (data.status || 'Active').toUpperCase();
+  }
+
+  if (joinedEl && data.created_at) {
+    try {
+      const dt = new Date(data.created_at);
+      joinedEl.textContent = `Practicing since ${dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}`;
+    } catch (_) {
+      joinedEl.textContent = 'Specialist Advisor';
+    }
+  }
+
+  updateConsultantDisplay(data, data.email);
+};
+
+const closeConsultantProfileModal = () => {
+  const modal = document.getElementById('consultantProfileModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    hideConsultantProfileAlert();
+  }
+};
+
+const handleSaveConsultantProfile = async (e) => {
+  if (e) e.preventDefault();
+  if (!token) {
+    showConsultantProfileAlert('Session expired. Please log in again.', 'error');
+    return;
+  }
+
+  const fnInput = document.getElementById('consultantProfileFirstName');
+  const lnInput = document.getElementById('consultantProfileLastName');
+  const emailInput = document.getElementById('consultantProfileEmail');
+  const phoneInput = document.getElementById('consultantProfilePhoneNumber');
+  const specInput = document.getElementById('consultantProfileSpecialization');
+  const saveBtn = document.getElementById('btnSaveConsultantProfile');
+  const spinner = document.getElementById('saveConsultantProfileSpinner');
+
+  const firstName = fnInput ? fnInput.value.trim() : '';
+  const lastName = lnInput ? lnInput.value.trim() : '';
+  const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
+  const phoneNumber = phoneInput ? phoneInput.value.trim() : '';
+  const specialization = specInput ? specInput.value.trim() : '';
+
+  if (!firstName) {
+    showConsultantProfileAlert('Please enter your first name.', 'error');
+    if (fnInput) fnInput.focus();
+    return;
+  }
+  if (!email || !email.includes('@')) {
+    showConsultantProfileAlert('Please enter a valid email address.', 'error');
+    if (emailInput) emailInput.focus();
+    return;
+  }
+
+  if (saveBtn) saveBtn.disabled = true;
+  if (spinner) spinner.classList.remove('hidden');
+  hideConsultantProfileAlert();
+
+  try {
+    const res = await fetch('/consultant/account-profile', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        first_name: firstName,
+        last_name: lastName,
+        email: email,
+        phone_number: phoneNumber,
+        specialization: specialization || 'Certified Aesthetic Advisor',
+      }),
+    });
+
+    const result = await res.json().catch(() => ({}));
+
+    if (res.ok) {
+      if (result.access_token) {
+        localStorage.setItem('access_token', result.access_token);
+      }
+      currentConsultantAccountProfile = result;
+      updateConsultantDisplay(result, email);
+      showConsultantProfileAlert('✓ Advisor credentials & practice profile saved successfully!', 'success');
+    } else {
+      showConsultantProfileAlert(result.detail || 'Failed to save profile. Please try again.', 'error');
+    }
+  } catch (err) {
+    console.error('Error saving consultant profile:', err);
+    showConsultantProfileAlert('An error occurred while saving profile. Please try again.', 'error');
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+    if (spinner) spinner.classList.add('hidden');
+  }
+};
+
+window.openConsultantProfileModal = openConsultantProfileModal;
+window.closeConsultantProfileModal = closeConsultantProfileModal;
+
+// Bind Profile Modal Listeners
+const bindConsultantProfileEvents = () => {
+  const sidebarUserInfo = document.getElementById('sidebarUserInfo');
+  if (sidebarUserInfo) {
+    sidebarUserInfo.addEventListener('click', openConsultantProfileModal);
+    sidebarUserInfo.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openConsultantProfileModal();
+      }
+    });
+  }
+
+  document.getElementById('btnCloseConsultantProfileModal')?.addEventListener('click', closeConsultantProfileModal);
+  document.getElementById('btnCancelConsultantProfile')?.addEventListener('click', closeConsultantProfileModal);
+  document.getElementById('consultantProfileModalBackdrop')?.addEventListener('click', closeConsultantProfileModal);
+  document.getElementById('consultantProfileForm')?.addEventListener('submit', handleSaveConsultantProfile);
+};
+
 // ── Boot ─────────────────────────────────────────────────────
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    bindConsultantProfileEvents();
+  });
+} else {
+  bindConsultantProfileEvents();
+}
+
 verifySession();
 initSectionFromHash();
+

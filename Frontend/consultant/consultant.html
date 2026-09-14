@@ -34,6 +34,100 @@
     <!-- Toast Notification Container -->
     <div id="toastContainer" class="toast-container"></div>
 
+    <!-- Consultant Profile & Details Modal -->
+    <div id="consultantProfileModal" class="profile-modal hidden" role="dialog" aria-labelledby="consultantProfileModalTitle" aria-modal="true">
+      <div class="profile-modal-backdrop" id="consultantProfileModalBackdrop"></div>
+      <div class="profile-modal-card account-profile-modal-card">
+        <!-- Header -->
+        <div class="modal-card-header">
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <div class="profile-header-avatar consultant-header-avatar" id="consultantProfileHeaderAvatar">C</div>
+            <div>
+              <h2 id="consultantProfileModalTitle" class="profile-modal-name">Consultant Profile &amp; Credentials</h2>
+              <p class="profile-modal-subtitle">Manage advisor details, contact info &amp; advisory focus</p>
+            </div>
+          </div>
+          <button type="button" id="btnCloseConsultantProfileModal" class="profile-modal-close" aria-label="Close modal">&times;</button>
+        </div>
+
+        <!-- Body / Form -->
+        <form id="consultantProfileForm" class="account-profile-form">
+          <!-- Consultant Summary Card Banner -->
+          <div class="account-summary-card consultant-banner">
+            <div class="account-summary-left">
+              <div class="account-summary-avatar" id="consultantProfileCardAvatar">C</div>
+              <div>
+                <div class="account-summary-title-row">
+                  <h3 id="consultantProfileCardFullName" class="account-summary-name">Skincare Consultant</h3>
+                  <span id="consultantProfileCardStatusBadge" class="account-status-badge">ACTIVE</span>
+                </div>
+                <p id="consultantProfileCardEmail" class="account-summary-email">consultant@example.com</p>
+                <div class="account-summary-tags">
+                  <span class="account-tag" id="consultantProfileCardSpecTag">Specialist Advisor</span>
+                  <span class="account-tag-sub" id="consultantProfileCardJoinedDate">Member Specialist</span>
+                </div>
+              </div>
+            </div>
+            <div class="account-summary-right">
+              <span class="account-badge-label">Advisory Authorization</span>
+              <span class="account-badge-verified">
+                <span class="status-indicator-dot"></span>
+                Certified Aesthetic Advisor
+              </span>
+            </div>
+          </div>
+
+          <!-- Feedback Alert Banner -->
+          <div id="consultantProfileAlert" class="account-profile-alert hidden"></div>
+
+          <!-- Personal & Professional Fields -->
+          <div class="account-form-section">
+            <h4 class="account-section-title">✨ Skincare Advisor Profile</h4>
+            
+            <div class="account-form-grid">
+              <div class="form-group mb-0">
+                <label for="consultantProfileFirstName" class="account-label">
+                  First Name <span class="required-star">*</span>
+                </label>
+                <input type="text" id="consultantProfileFirstName" class="account-input" placeholder="e.g. Elena" required />
+              </div>
+
+              <div class="form-group mb-0">
+                <label for="consultantProfileLastName" class="account-label">Last Name</label>
+                <input type="text" id="consultantProfileLastName" class="account-input" placeholder="e.g. Vance" />
+              </div>
+
+              <div class="form-group mb-0">
+                <label for="consultantProfileEmail" class="account-label">
+                  Email Address <span class="required-star">*</span>
+                </label>
+                <input type="email" id="consultantProfileEmail" class="account-input" placeholder="consultant@beauty.com" required />
+              </div>
+
+              <div class="form-group mb-0">
+                <label for="consultantProfilePhoneNumber" class="account-label">Phone Number</label>
+                <input type="tel" id="consultantProfilePhoneNumber" class="account-input" placeholder="+1 (555) 987-6543" />
+              </div>
+
+              <div class="form-group mb-0" style="grid-column: 1 / -1;">
+                <label for="consultantProfileSpecialization" class="account-label">Advisory Focus &amp; Specialization</label>
+                <input type="text" id="consultantProfileSpecialization" class="account-input" placeholder="e.g. Holistic Skin Health &amp; Active Ingredient Pairing" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Modal Action Buttons -->
+          <div class="account-modal-actions">
+            <button type="button" id="btnCancelConsultantProfile" class="btn-account-cancel">Cancel</button>
+            <button type="submit" id="btnSaveConsultantProfile" class="btn-account-save consultant-save-btn">
+              <span id="saveConsultantProfileSpinner" class="spinner-small hidden"></span>
+              <span>Save Profile Changes</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Comprehensive Client Dossier Modal -->
     <div id="profileModal" class="profile-modal hidden">
       <div class="profile-modal-backdrop" id="modalBackdrop"></div>
@@ -452,12 +546,13 @@
         </nav>
 
         <div class="sidebar-footer">
-          <div class="user-info">
-            <div class="avatar-circle">C</div>
+          <div class="user-info user-profile-trigger" id="sidebarUserInfo" role="button" tabindex="0" title="Click to view &amp; edit your profile">
+            <div class="avatar-circle" id="sidebarConsultantAvatar">C</div>
             <div class="user-details truncate">
               <span id="sidebarConsultantName" class="user-name truncate">Consultant</span>
-              <span class="user-role">Dermatological Specialist</span>
+              <span id="sidebarConsultantSpecialization" class="user-role truncate">Certified Aesthetic Advisor</span>
             </div>
+            <div class="profile-edit-indicator" title="Edit Profile">✏️</div>
           </div>
           <a href="../index.html" class="sidebar-logout-btn" id="headerLogout" title="Logout">
             <span>Logout</span>

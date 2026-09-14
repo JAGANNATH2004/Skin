@@ -36,7 +36,11 @@ class Consultant(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False, default="")
+    first_name = Column(String(100), nullable=True, default="")
+    last_name = Column(String(100), nullable=True, default="")
     email = Column(String(255), unique=True, index=True, nullable=False)
+    phone_number = Column(String(50), nullable=True, default="")
+    specialization = Column(String(255), nullable=True, default="Skincare Specialist")
     password_hash = Column(String(255), nullable=False)
     status = Column(String(20), nullable=False, default="pending")
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -198,7 +202,10 @@ class Dermatologist(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False, default="")
+    first_name = Column(String(100), nullable=True, default="")
+    last_name = Column(String(100), nullable=True, default="")
     email = Column(String(255), unique=True, index=True, nullable=False)
+    phone_number = Column(String(50), nullable=True, default="")
     password_hash = Column(String(255), nullable=False)
     status = Column(String(20), nullable=False, default="pending")  # pending, approved, rejected
     license_number = Column(String(100), nullable=True, default="")
