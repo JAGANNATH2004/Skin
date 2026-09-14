@@ -23,7 +23,7 @@ def create_base_email_template(
     badge: str,
     content_html: str,
     action_button_text: str = "Open My Dashboard",
-    action_url: str = "http://127.0.0.1:8000/user/user.html#score",
+    action_url: str = "https://skin.ondevice.shop/user/user.html#score",
     footer_note: str = "You received this automated reminder based on your skincare performance and profile preferences."
 ) -> str:
     """
@@ -371,7 +371,7 @@ def send_welcome_notification(user_email: str, user_name: str, user_id: Optional
         badge=badge,
         content_html=body,
         action_button_text="Open Dashboard",
-        action_url="http://127.0.0.1:8000/user/user.html"
+        action_url="https://skin.ondevice.shop/user/user.html"
     )
     return send_email_notification(recipient_email=user_email, subject=subject, html_content=html, user_id=user_id)
 
@@ -405,7 +405,7 @@ def send_appointment_reminder(
         badge=badge,
         content_html=body,
         action_button_text="View Details",
-        action_url="http://127.0.0.1:8000/user/user.html"
+        action_url="https://skin.ondevice.shop/user/user.html"
     )
     return send_email_notification(recipient_email=user_email, subject=subject, html_content=html, user_id=user_id)
 
@@ -461,7 +461,7 @@ def send_clinical_update_notification(
         badge=badge,
         content_html=body,
         action_button_text="Inspect Portal",
-        action_url="http://127.0.0.1:8000/user/user.html"
+        action_url="https://skin.ondevice.shop/user/user.html"
     )
     return send_email_notification(recipient_email=patient_email, subject=subject, html_content=html, user_id=user_id)
 
