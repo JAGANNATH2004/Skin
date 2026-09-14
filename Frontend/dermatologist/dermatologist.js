@@ -1200,16 +1200,24 @@ const updateDermatologistDisplay = (profile, fallbackEmail) => {
   let spec = 'Board Certified Specialist';
 
   if (profile) {
+    let rawName = '';
     if (profile.first_name || profile.last_name) {
-      displayName = `Dr. ${[profile.first_name, profile.last_name].filter(Boolean).join(' ')}`.trim();
+      rawName = [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim();
     } else if (profile.name) {
-      displayName = profile.name.toLowerCase().startsWith('dr') ? profile.name : `Dr. ${profile.name}`;
+      rawName = profile.name.trim();
     }
-    if (profile.first_name) {
-      initials = profile.first_name.charAt(0).toUpperCase();
-      if (profile.last_name) initials += profile.last_name.charAt(0).toUpperCase();
+    if (rawName) {
+      displayName = /^dr\.?\s+/i.test(rawName) ? rawName : `Dr. ${rawName}`;
+    }
+
+    const cleanForInitials = (profile.first_name || profile.name || '').replace(/^dr\.?\s+/i, '').trim();
+    if (cleanForInitials) {
+      initials = cleanForInitials.charAt(0).toUpperCase();
+      if (profile.last_name && profile.last_name.trim()) {
+        initials += profile.last_name.trim().charAt(0).toUpperCase();
+      }
     } else if (profile.name) {
-      const parts = profile.name.trim().split(/\s+/);
+      const parts = profile.name.replace(/^dr\.?\s+/i, '').trim().split(/\s+/);
       initials = parts.map(p => p.charAt(0).toUpperCase()).slice(0, 2).join('') || 'Dr';
     }
     if (profile.specialization) {

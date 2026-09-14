@@ -1116,6 +1116,7 @@ body {
   background: rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
+  z-index: 1;
 }
 
 .dossier-card,
@@ -1926,14 +1927,17 @@ body {
 
 /* Modal Dialog */
 .account-profile-modal-card {
-  max-width: 640px !important;
+  position: relative !important;
+  z-index: 10 !important;
+  max-width: 620px !important;
   width: 95vw !important;
   max-height: 90vh !important;
   overflow-y: auto !important;
   padding: 1.75rem !important;
   border-radius: 1.5rem !important;
-  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.45), 0 0 0 1px rgba(15, 23, 42, 0.08) !important;
   background: #ffffff !important;
+  color: #0f172a !important;
 }
 
 .profile-header-avatar {
@@ -1951,23 +1955,32 @@ body {
   flex-shrink: 0;
 }
 
-.profile-modal-subtitle {
-  margin: 0.2rem 0 0;
-  font-size: 0.78rem;
-  color: #64748b;
+.account-profile-modal-card .profile-modal-name {
+  color: #0f172a !important;
+  font-size: 1.25rem !important;
+  font-weight: 800 !important;
+  margin: 0 !important;
+  line-height: 1.2 !important;
+}
+
+.account-profile-modal-card .profile-modal-subtitle {
+  color: #64748b !important;
+  font-size: 0.8rem !important;
+  margin: 0.2rem 0 0 !important;
 }
 
 /* Summary Card Banner */
 .account-summary-card.derm-banner {
-  background: linear-gradient(135deg, #0f172a 0%, #134e4a 50%, #0f172a 100%);
+  background: linear-gradient(135deg, #0f172a 0%, #134e4a 55%, #064e3b 100%);
   color: #ffffff;
   padding: 1.25rem 1.35rem;
   border-radius: 1.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 1rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
   box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.25);
 }
 
@@ -1975,16 +1988,17 @@ body {
   display: flex;
   align-items: center;
   gap: 1rem;
+  min-width: 0;
+  flex: 1 1 280px;
 }
 
 .account-summary-avatar {
-  width: 54px;
-  height: 54px;
+  width: 52px;
+  height: 52px;
   border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08));
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18), inset 0 1px 1px rgba(255, 255, 255, 0.3);
   color: #ffffff;
   font-weight: 800;
   font-size: 1.35rem;
@@ -2002,7 +2016,7 @@ body {
 
 .account-summary-name {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: #ffffff;
 }
@@ -2013,9 +2027,9 @@ body {
   letter-spacing: 0.05em;
   padding: 0.2rem 0.55rem;
   border-radius: 9999px;
-  background: rgba(16, 185, 129, 0.2);
+  background: rgba(16, 185, 129, 0.25);
   color: #34d399;
-  border: 1px solid rgba(52, 211, 153, 0.3);
+  border: 1px solid rgba(52, 211, 153, 0.4);
 }
 
 .account-summary-email {
@@ -2027,16 +2041,17 @@ body {
 .account-summary-tags {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
-  margin-top: 0.25rem;
+  margin-top: 0.35rem;
 }
 
 .account-tag {
   font-size: 0.7rem;
   font-weight: 600;
-  background: rgba(255, 255, 255, 0.1);
-  padding: 0.15rem 0.5rem;
-  border-radius: 0.4rem;
+  background: rgba(255, 255, 255, 0.12);
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.45rem;
   color: #e2e8f0;
 }
 
@@ -2136,9 +2151,9 @@ body {
 
 .account-label {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  color: #475569;
+  color: #334155;
   margin-bottom: 0.35rem;
 }
 
@@ -2149,11 +2164,11 @@ body {
 .account-input {
   width: 100%;
   box-sizing: border-box;
-  padding: 0.65rem 0.85rem;
+  padding: 0.72rem 0.9rem;
   border-radius: 0.75rem;
-  border: 1px solid #cbd5e1;
-  background: #f8fafc;
-  font-size: 0.85rem;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  font-size: 0.875rem;
   font-weight: 500;
   color: #0f172a;
   transition: all 0.2s ease;
@@ -2163,7 +2178,7 @@ body {
   outline: none;
   background: #ffffff;
   border-color: #059669;
-  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.18);
 }
 
 /* Action Buttons */
